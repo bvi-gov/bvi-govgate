@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Government Services Catalog
+model GovService {
+  id              String   @id @default(uuid()) @db.Uuid
+  slug            String   @unique
+  name            String
+  description     String   @default("")
+  category        String   @default("general")
+  department      String   @default("")
+  processingDays  Int      @default(5) @map("processing_days")
+  feeAmount       Float    @default(0) @map("fee_amount")
+  currency        String   @default("USD")
+  requirements    String   @default("[]")
+  formFields      String   @default("[]") @map("form_fields")
+  status          String   @default("active")
+  icon            String   @default("FileText")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  applications    GovApplication[]
+
+  @@map("gov_services")
+}
+
+// Citizen Applications
+model GovApplication {
+  id                String   @id @default(uuid()) @db.Uuid
+  serviceId         String?  @map("service_id") @db.Uuid
+  service           GovService? @relation(fields: [serviceId], references: [id])
+  trackingNumber    String   @unique @map("tracking_number")
+  applicantName     String   @map("applicant_name")
+  applicantEmail    String   @map("applicant_email")
+  applicantPhone    String   @default("") @map("applicant_phone")
+  formData          String   @default("{}") @map("form_data")
+  status            String   @default("submitted")
+  paymentStatus     String   @default("unpaid") @map("payment_status")
+  paymentMethod     String?  @map("payment_method")
+  paymentAmount     Float    @default(0) @map("payment_amount")
+  paymentRef        String?  @map("payment_ref")
+  paidAt            DateTime? @map("paid_at") @db.Timestamptz(6)
+  reviewedBy        String?  @map("reviewed_by")
+  reviewedAt        DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewerNotes     String?  @map("reviewer_notes")
+  issuedAt          DateTime? @map("issued_at") @db.Timestamptz(6)
+  certificateUrl    String?  @map("certificate_url")
+  certificateNumber String?  @map("certificate_number")
+  rejectionReason   String?  @map("rejection_reason")
+  ipAddress         String?  @map("ip_address")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  timeline          ApplicationTimeline[]
+  payment           Payment?
+  documentUploads   DocumentUpload[]
+
+  @@map("gov_applications")
+}
+
+// Application Timeline (status history)
+model ApplicationTimeline {
+  id            String   @id @default(uuid()) @db.Uuid
+  applicationId String?  @map("application_id") @db.Uuid
+  application   GovApplication? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  status        String
+  note          String?
+  actor         String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("application_timeline")
+}
+
+// Government Officers / Admin Users
+model Officer {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String
+  email       String    @unique
+  password    String    @default("") @map("password_hash")
+  role        String    @default("officer")
+  department  String    @default("")
+  status      String    @default("active")
+  lastLogin   DateTime? @map("last_login") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("officers")
+}
+
+// Payments
+model Payment {
+  id              String    @id @default(uuid()) @db.Uuid
+  applicationId   String?   @unique @map("application_id") @db.Uuid
+  application     GovApplication? @relation(fields: [applicationId], references: [id])
+  amount          Float     @default(0)
+  method          String    @default("credit_card")
+  status          String    @default("pending")
+  gatewayRef      String?   @map("gateway_ref")
+  receiptNumber   String?   @map("receipt_number")
+  paidAt          DateTime? @map("paid_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("payments")
+}
+
+// System Notifications
+model Notification {
+  id             String   @id @default(uuid()) @db.Uuid
+  type           String   @default("info")
+  title          String
+  message        String   @default("")
+  recipientEmail String   @default("") @map("recipient_email")
+  read           Boolean  @default(false)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("notifications")
+}
+
+// Document Uploads (Scanner/Camera)
+model DocumentUpload {
+  id            String    @id @default(uuid()) @db.Uuid
+  applicationId String?   @map("application_id") @db.Uuid
+  application   GovApplication? @relation(fields: [applicationId], references: [id])
+  fileName      String    @map("file_name")
+  fileType      String    @default("") @map("file_type")
+  fileSize      Int       @default(0) @map("file_size")
+  filePath      String?   @map("file_url")
+  documentType  String?   @map("document_type")
+  uploadedBy    String?   @map("uploaded_by")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("document_uploads")
+}
