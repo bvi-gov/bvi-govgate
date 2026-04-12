@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://dtmnnxrdbhzdtqviirtk.supabase.co';
-const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0bW5ueHJkYmh6ZHRxdmlpcnRrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTYwNzg3NywiZXhwIjoyMDkxMTgzODc3fQ.6ECXKGX87trX7nNfl8GYVlvOQBhjXe7dyzsGsD9-52w';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://dtmnnxrdbhzdtqviirtk.supabase.co';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0bW5ueHJkYmh6ZHRxdmlpcnRrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTYwNzg3NywiZXhwIjoyMDkxMTgzODc3fQ.6ECXKGX87trX7nNfl8GYVlvOQBhjXe7dyzsGsD9-52w';
 
 const globalForSupabase = globalThis as unknown as {
   supabase: SupabaseClient | undefined

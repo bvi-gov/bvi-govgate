@@ -1,8 +1,16 @@
 /**
- * Simple in-memory rate limiter for API endpoints.
- * Uses a sliding window approach per IP address.
+ * Rate limiter backed by Supabase with in-memory cache fallback.
+ * Uses a sliding-window approach per IP address.
+ *
+ * Flow:
+ *  1. Check local in-memory cache first (fast path).
+ *  2. On cache miss, try Supabase.
+ *  3. If Supabase is unreachable, fall back to pure in-memory.
  */
 
+import { supabase } from '@/lib/supabase';
+
+// ─── In-memory fallback ────────────────────────────────────────────
 interface RateLimitEntry {
   count: number;
   resetTime: number;
@@ -19,6 +27,8 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000);
+
+// ─── Types ─────────────────────────────────────────────────────────
 
 export interface RateLimitConfig {
   /** Number of requests allowed in the window */
@@ -37,6 +47,8 @@ export interface RateLimitResult {
   /** Seconds until the rate limit resets (only set when rate limited) */
   retryAfter?: number;
 }
+
+// ─── Config presets ────────────────────────────────────────────────
 
 const DEFAULT_CONFIG: RateLimitConfig = {
   maxRequests: 100,
@@ -58,52 +70,94 @@ const APPLICATION_SUBMIT_CONFIG: RateLimitConfig = {
   windowMs: 60 * 1000, // 1 minute
 };
 
+export {
+  DEFAULT_CONFIG,
+  LOGIN_CONFIG,
+  PDF_DOWNLOAD_CONFIG,
+  APPLICATION_SUBMIT_CONFIG,
+};
+
+// ─── Core check function ───────────────────────────────────────────
+
 /**
  * Check if a request from a given IP should be rate limited.
- * @param ip - The client IP address
- * @param config - Rate limit configuration (uses default if not provided)
- * @returns Rate limit check result
+ * Tries Supabase first, falls back to in-memory on error.
  */
-export function checkRateLimit(ip: string, config?: RateLimitConfig): RateLimitResult {
+export async function checkRateLimit(
+  ip: string,
+  config?: RateLimitConfig
+): Promise<RateLimitResult> {
   const cfg = config || DEFAULT_CONFIG;
   const now = Date.now();
   const key = `${ip}:${cfg.maxRequests}:${cfg.windowMs}`;
 
-  const entry = rateLimitMap.get(key);
+  // --- Fast path: check local cache ---
+  const cached = rateLimitMap.get(key);
+  if (cached && cached.resetTime > now) {
+    if (cached.count >= cfg.maxRequests) {
+      const retryAfter = Math.ceil((cached.resetTime - now) / 1000);
+      return {
+        allowed: false,
+        remaining: 0,
+        resetTime: cached.resetTime,
+        retryAfter,
+      };
+    }
+    cached.count++;
+    const remaining = Math.max(0, cfg.maxRequests - cached.count);
+    return { allowed: true, remaining, resetTime: cached.resetTime };
+  }
 
-  if (!entry || entry.resetTime <= now) {
-    // Start a new window
-    const newEntry: RateLimitEntry = {
-      count: 1,
-      resetTime: now + cfg.windowMs,
-    };
-    rateLimitMap.set(key, newEntry);
+  // --- Slow path: try Supabase ---
+  try {
+    const resetTime = now + cfg.windowMs;
+    const resetTs = new Date(resetTime).toISOString();
 
+    // Upsert: increment count if a row exists for this key+window
+    const { data, error } = await supabase.rpc('increment_rate_limit', {
+      p_key: key,
+      p_ip: ip,
+      p_window_end: resetTs,
+      p_max_requests: cfg.maxRequests,
+    });
+
+    if (!error && data) {
+      const count = typeof data === 'number' ? data : Number(data) || 1;
+      const allowed = count <= cfg.maxRequests;
+      const remaining = Math.max(0, cfg.maxRequests - count);
+
+      // Sync local cache
+      rateLimitMap.set(key, { count, resetTime });
+
+      if (!allowed) {
+        const retryAfter = Math.ceil((resetTime - now) / 1000);
+        return { allowed: false, remaining: 0, resetTime, retryAfter };
+      }
+
+      return { allowed: true, remaining, resetTime };
+    }
+  } catch (err) {
+    console.warn('Rate limit Supabase call failed, using in-memory fallback:', err);
+  }
+
+  // --- Fallback: pure in-memory ---
+  if (cached && cached.resetTime <= now) {
+    // Window expired – restart
+    const resetTime = now + cfg.windowMs;
+    rateLimitMap.set(key, { count: 1, resetTime });
     return {
       allowed: true,
       remaining: cfg.maxRequests - 1,
-      resetTime: newEntry.resetTime,
+      resetTime,
     };
   }
 
-  if (entry.count >= cfg.maxRequests) {
-    // Rate limited
-    const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
-    return {
-      allowed: false,
-      remaining: 0,
-      resetTime: entry.resetTime,
-      retryAfter,
-    };
-  }
-
-  // Increment count
-  entry.count++;
-
+  const resetTime = now + cfg.windowMs;
+  rateLimitMap.set(key, { count: 1, resetTime });
   return {
     allowed: true,
-    remaining: cfg.maxRequests - entry.count,
-    resetTime: entry.resetTime,
+    remaining: cfg.maxRequests - 1,
+    resetTime,
   };
 }
 
@@ -121,6 +175,11 @@ export function getRateLimitConfigForPath(pathname: string): RateLimitConfig | n
     return PDF_DOWNLOAD_CONFIG;
   }
 
+  // Public certificate download by tracking number
+  if (/^\/api\/applications\/track\/[^/]+\/certificate/.test(pathname)) {
+    return PDF_DOWNLOAD_CONFIG;
+  }
+
   // Application submission
   if (pathname === '/api/applications' || pathname === '/api/applications/') {
     return APPLICATION_SUBMIT_CONFIG;
@@ -128,10 +187,3 @@ export function getRateLimitConfigForPath(pathname: string): RateLimitConfig | n
 
   return DEFAULT_CONFIG;
 }
-
-export {
-  DEFAULT_CONFIG,
-  LOGIN_CONFIG,
-  PDF_DOWNLOAD_CONFIG,
-  APPLICATION_SUBMIT_CONFIG,
-};

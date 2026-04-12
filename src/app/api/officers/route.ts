@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     const clientIp = request.headers.get('x-forwarded-for') || 
                      request.headers.get('x-real-ip') || 
                      'unknown';
-    logAction(officer.email, 'login', 'officer', officer.id, {
+    await logAction(officer.email, 'login', 'officer', officer.id, {
       officerName: officer.name,
       role: officer.role,
       department: officer.department,

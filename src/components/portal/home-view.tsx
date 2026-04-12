@@ -1,19 +1,15 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store';
 import { Button } from '@/components/ui/button';
 import {
   Baby,
-  Heart,
-  HeartHandshake,
   Store,
   Briefcase,
-  Building2,
   Car,
   Calculator,
   BookOpen,
-  Shield,
   ArrowRight,
   Search,
   Clock,
@@ -24,6 +20,7 @@ import {
   Globe,
   ChevronRight,
   Mountain,
+  Loader2,
 } from 'lucide-react';
 
 const popularServices = [
@@ -36,12 +33,52 @@ const popularServices = [
   { slug: 'property-title-search', name: 'Property Title Search', icon: Mountain, color: 'bg-lime-100 text-lime-700', desc: 'Search land titles and ownership records' },
 ];
 
+interface StatsData {
+  totalApplications: number;
+  approvedApplications: number;
+  issuedCount: number;
+  totalRevenue: number;
+  totalServices: number;
+  totalOfficers: number;
+  recentApplications: unknown[];
+}
+
 export function HomeView() {
   const { setCurrentView, setSelectedServiceSlug } = useAppStore();
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/stats');
+        if (res.ok) {
+          const data = await res.json();
+          setStats(data);
+        }
+      } catch {
+        // Silently fail – hardcoded fallbacks will be shown
+      } finally {
+        setStatsLoading(false);
+      }
+    }
+    fetchStats();
+  }, []);
 
   const handleServiceClick = (slug: string) => {
     setSelectedServiceSlug(slug);
     setCurrentView('service-detail');
+  };
+
+  const formatNumber = (n: number) => {
+    if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K+`;
+    return `${n}`;
+  };
+
+  const formatCurrency = (n: number) => {
+    if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    if (n >= 1000) return `$${(n / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+    return `$${n.toLocaleString()}`;
   };
 
   return (
@@ -90,18 +127,24 @@ export function HomeView() {
       <section className="bg-[#0C1B2A] text-white -mt-1">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {[
-              { icon: FileCheck, value: '1,247+', label: 'Applications Processed' },
-              { icon: Clock, value: '3.5 days', label: 'Average Processing Time' },
-              { icon: Zap, value: '15', label: 'Digital Services' },
-              { icon: Users, value: '98%', label: 'Citizen Satisfaction' },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <stat.icon className="w-6 h-6 text-[#FFD100] mx-auto mb-2" />
-                <div className="text-2xl font-bold">{stat.value}</div>
-                <div className="text-xs text-white/50 mt-1">{stat.label}</div>
+            {statsLoading ? (
+              <div className="col-span-2 md:col-span-4 flex items-center justify-center py-6">
+                <Loader2 className="w-6 h-6 text-[#FFD100] animate-spin" />
               </div>
-            ))}
+            ) : (
+              [
+                { icon: FileCheck, value: stats ? formatNumber(stats.totalApplications) : '1,247+', label: 'Applications Processed' },
+                { icon: Clock, value: stats ? `${((stats.totalApplications > 0 ? (stats.approvedApplications + stats.issuedCount) / stats.totalApplications : 0.98) * 100).toFixed(0)}% Approved` : '3.5 days', label: stats ? 'Approval Rate' : 'Average Processing Time' },
+                { icon: Zap, value: stats ? String(stats.totalServices) : '15', label: 'Digital Services' },
+                { icon: Users, value: stats ? formatNumber(stats.totalApplications > 0 ? (stats.approvedApplications + stats.issuedCount) : 1222) : '98%', label: stats ? 'Certificates Issued' : 'Citizen Satisfaction' },
+              ].map((stat) => (
+                <div key={stat.label} className="text-center">
+                  <stat.icon className="w-6 h-6 text-[#FFD100] mx-auto mb-2" />
+                  <div className="text-2xl font-bold">{stat.value}</div>
+                  <div className="text-xs text-white/50 mt-1">{stat.label}</div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>

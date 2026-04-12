@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabase, TABLES } from '@/lib/supabase';
 import { hashPassword } from '@/lib/hash';
 
@@ -329,8 +329,13 @@ const sampleApplications = [
   { serviceName: 'passport-application', applicantName: 'Dwight Lewis', applicantEmail: 'd.lewis@bvi.gov.vg', applicantPhone: '+1 284 445 9900', formData: JSON.stringify({ fullName: 'Dwight Ronaldo Lewis' }), status: 'issued', paymentStatus: 'paid', paymentAmount: 75, paymentMethod: 'credit_card', paidAt: new Date(Date.now() - 40 * 86400000), createdAt: new Date(Date.now() - 50 * 86400000), reviewedBy: 'Sharlene George', reviewedAt: new Date(Date.now() - 38 * 86400000), issuedAt: new Date(Date.now() - 38 * 86400000), certificateNumber: 'CERT-2025-GW4T6Y', certificateUrl: '/documents/CERT-2025-GW4T6Y.pdf', timelineEntries: [{ status: 'payment_pending', note: 'Application created.', actor: 'system' }, { status: 'issued', note: 'Issued.', actor: 'system' }] },
 ];
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    // Admin-only check
+    const role = request.headers.get('x-officer-role');
+    if (role !== 'admin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
     // Check if data already exists (idempotent)
     const { count: existingCount } = await supabase
       .from(TABLES.SERVICES)

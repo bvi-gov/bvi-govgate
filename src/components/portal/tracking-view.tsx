@@ -56,6 +56,7 @@ export function TrackingView() {
   const [result, setResult] = useState<TrackedApp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [downloadingCertificate, setDownloadingCertificate] = useState(false);
 
   const handleTrack = async () => {
     if (!trackingInput.trim()) return;
@@ -82,12 +83,37 @@ export function TrackingView() {
       setTrackingInput(submittedTrackingNumber);
       handleTrack();
     }
-  // eslint-disable-next-line
   }, []);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('Copied to clipboard');
+  };
+
+  const handleDownloadCertificate = async () => {
+    if (!result?.trackingNumber) return;
+    setDownloadingCertificate(true);
+    try {
+      const res = await fetch(`/api/applications/track/${result.trackingNumber}/certificate`);
+      if (!res.ok) {
+        toast.error('Failed to download certificate');
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificate-${result.certificateNumber || result.trackingNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success('Certificate downloaded successfully');
+    } catch {
+      toast.error('Failed to download certificate');
+    } finally {
+      setDownloadingCertificate(false);
+    }
   };
 
   return (
@@ -171,9 +197,11 @@ export function TrackingView() {
                   <Button
                     size="sm"
                     className="bg-[#009B3A] text-white hover:bg-[#007A2E]"
+                    onClick={handleDownloadCertificate}
+                    disabled={downloadingCertificate}
                   >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download
+                    {downloadingCertificate ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                    {downloadingCertificate ? 'Downloading...' : 'Download'}
                   </Button>
                 </div>
               </div>

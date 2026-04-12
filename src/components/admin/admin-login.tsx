@@ -142,24 +142,26 @@ export function AdminLogin() {
           </Button>
         </div>
 
-        {/* Admin Credentials Info */}
-        <div className="mt-6 bg-[#131F2E]/50 border border-[#1E3A5F]/50 rounded-xl p-4">
-          <p className="text-xs text-gray-500 text-center mb-2">Staff Access Credentials</p>
-          <div className="space-y-1.5 text-xs">
-            <div className="flex justify-between text-gray-400">
-              <span>Admin:</span>
-              <span className="text-gray-300">k.wheatley@bvi.gov.vg</span>
+        {/* Dev Credentials - only shown in development */}
+        {process.env.NODE_ENV === 'development' && (
+          <details className="mt-6 bg-[#131F2E]/50 border border-[#1E3A5F]/50 rounded-xl p-4">
+            <summary className="text-xs text-gray-500 cursor-pointer text-center">Dev Credentials (hidden in production)</summary>
+            <div className="mt-2 space-y-1.5 text-xs">
+              <div className="flex justify-between text-gray-400">
+                <span>Admin:</span>
+                <span className="text-gray-300">k.******@bvi.gov.vg</span>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Senior Officer:</span>
+                <span className="text-gray-300">d.******@bvi.gov.vg</span>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Officer:</span>
+                <span className="text-gray-300">s.******@bvi.gov.vg</span>
+              </div>
             </div>
-            <div className="flex justify-between text-gray-400">
-              <span>Senior Officer:</span>
-              <span className="text-gray-300">d.malone@bvi.gov.vg</span>
-            </div>
-            <div className="flex justify-between text-gray-400">
-              <span>Officer:</span>
-              <span className="text-gray-300">s.george@bvi.gov.vg</span>
-            </div>
-          </div>
-        </div>
+          </details>
+        )}
       </div>
     </div>
   );

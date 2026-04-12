@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       const payload = await verifyToken(token);
       if (payload) {
         actorEmail = payload.email;
-        logAction(actorEmail, 'logout', 'officer', payload.officerId, {
+        await logAction(actorEmail, 'logout', 'officer', payload.officerId, {
           officerName: payload.name,
           role: payload.role,
         });

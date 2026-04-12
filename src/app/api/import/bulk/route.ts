@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { supabase, TABLES } from '@/lib/supabase';
 
 function generateTrackingNumber() {
@@ -10,8 +10,14 @@ function generateTrackingNumber() {
   return `BVI-${dateStr}-${random}`;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    // RBAC: admin and senior_officer only
+    const role = request.headers.get('x-officer-role');
+    if (role !== 'admin' && role !== 'senior_officer') {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { serviceSlug, data } = body;
 

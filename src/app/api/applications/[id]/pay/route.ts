@@ -9,6 +9,13 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+
+    // RBAC: admin and senior_officer only
+    const role = request.headers.get('x-officer-role');
+    if (role !== 'admin' && role !== 'senior_officer') {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { method = 'credit_card', reviewedBy, providerPaymentRef, providerReceiptNumber } = body;
 

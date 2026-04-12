@@ -2,17 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, TABLES, mapApplication, mapService } from '@/lib/supabase';
 import { generatePoliceCertificatePDF, generateGenericCertificatePDF } from '@/lib/generate-pdf';
 
+/**
+ * GET /api/applications/track/[trackingNumber]/certificate
+ *
+ * PUBLIC endpoint — no auth required.
+ * Looks up an application by tracking number and, if its status is "issued",
+ * generates and serves the PDF certificate.
+ */
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ trackingNumber: string }> }
 ) {
   try {
-    const { id } = await params;
+    const { trackingNumber } = await params;
 
+    // ── 1. Lookup application by tracking number ──
     const { data: appRows, error: fetchError } = await supabase
       .from(TABLES.APPLICATIONS)
       .select('*')
-      .eq('id', id)
+      .eq('tracking_number', trackingNumber)
       .limit(1);
 
     if (fetchError || !appRows?.[0]) {
@@ -21,23 +29,17 @@ export async function GET(
 
     const application = mapApplication(appRows[0]);
 
-    if (application.status !== 'approved' && application.status !== 'issued') {
-      return NextResponse.json({ error: 'Application must be approved or issued to generate certificate' }, { status: 400 });
+    if (application.status !== 'issued') {
+      return NextResponse.json(
+        { error: 'Certificate is not yet available for this application.' },
+        { status: 404 }
+      );
     }
 
     const formData = JSON.parse(application.formData || '{}');
-
     const certificateNumber = application.certificateNumber || `CERT-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-    // Update certificate number if not set
-    if (!application.certificateNumber) {
-      await supabase
-        .from(TABLES.APPLICATIONS)
-        .update({ certificate_number: certificateNumber })
-        .eq('id', id);
-    }
-
-    // Fetch service
+    // ── 2. Fetch the associated service ──
     const { data: serviceRows } = await supabase
       .from(TABLES.SERVICES)
       .select('*')
@@ -47,6 +49,7 @@ export async function GET(
 
     const slug = service?.slug || '';
     const dateIssued = application.issuedAt || new Date().toISOString();
+
     let pdfBuffer: Buffer;
     let fileName: string;
 
@@ -73,7 +76,6 @@ export async function GET(
 
       pdfBuffer = generatePoliceCertificatePDF(pdfData);
       fileName = `police-certificate-${certificateNumber}.pdf`;
-
     } else {
       let formFieldDefs: Array<{ key: string; label: string; type?: string }> = [];
       try {
@@ -122,19 +124,6 @@ export async function GET(
       fileName = `${slug}-certificate-${certificateNumber}.pdf`;
     }
 
-    // Update application status to issued if it was approved
-    if (application.status === 'approved') {
-      await supabase
-        .from(TABLES.APPLICATIONS)
-        .update({
-          status: 'issued',
-          issued_at: new Date().toISOString(),
-          certificate_number: certificateNumber,
-          certificate_url: `/certificates/${id}/pdf`,
-        })
-        .eq('id', id);
-    }
-
     return new NextResponse(pdfBuffer, {
       headers: {
         'Content-Type': 'application/pdf',
@@ -142,7 +131,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Error generating PDF:', error);
-    return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 });
+    console.error('Error generating public certificate PDF:', error);
+    return NextResponse.json({ error: 'Failed to generate certificate' }, { status: 500 });
   }
 }

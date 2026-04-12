@@ -7,7 +7,6 @@ import { checkRateLimit, getRateLimitConfigForPath } from '@/lib/rate-limit';
  * These are excluded from JWT verification checks.
  */
 const PUBLIC_API_ROUTES = [
-  '/api/seed',
   '/api/services',           // GET services catalog
   '/api/applications',       // POST submit application (public)
   '/api/applications/track', // GET track application by tracking number
@@ -37,19 +36,18 @@ function isPublicRoute(pathname: string, method: string): boolean {
     return true;
   }
 
-  // /api/certificates/*/pdf requires auth but is exempted from middleware
-  // (handled by its own route with cookie-based auth)
-  if (/^\/api\/certificates\/[^/]+\/pdf/.test(pathname)) {
-    return true;
-  }
-
   // /api/officers/logout (clears cookie, needs to work regardless)
   if (pathname === '/api/officers/logout') {
     return true;
   }
 
-  // /api/seed
-  if (pathname === '/api/seed') {
+  // /api/stats GET is public (homepage stats display)
+  if (pathname === '/api/stats' && method === 'GET') {
+    return true;
+  }
+
+  // /api/applications/track/*/certificate GET is public (download certificate by tracking number)
+  if (/^\/api\/applications\/track\/[^/]+\/certificate$/.test(pathname) && method === 'GET') {
     return true;
   }
 
@@ -129,7 +127,7 @@ export async function middleware(request: NextRequest) {
       request.headers.get('x-real-ip') ||
       'unknown';
 
-    const rateLimitResult = checkRateLimit(clientIp, rateLimitConfig);
+    const rateLimitResult = await checkRateLimit(clientIp, rateLimitConfig);
 
     // Add rate limit headers to all responses
     const headers = new Headers();

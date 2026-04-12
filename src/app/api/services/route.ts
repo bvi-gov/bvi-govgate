@@ -33,6 +33,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Admin-only check for creating services
+    const role = request.headers.get('x-officer-role');
+    if (role !== 'admin') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
     const body = await request.json();
     const dbRow = mapKeysToSnakeCase(body);
     const { data, error } = await supabase
